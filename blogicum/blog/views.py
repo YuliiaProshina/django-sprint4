@@ -1,6 +1,14 @@
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from .models import Post, Category
+from django.views.generic import (
+    CreateView, DeleteView, DetailView, ListView, UpdateView
+)
+from django.contrib.auth import get_user_model
+from django.db import models
+
+
+User = get_user_model()
 
 
 def index(request):
@@ -49,3 +57,13 @@ def category_posts(request, category_slug):
         'post_list': posts
     }
     return render(request, 'blog/category.html', context)
+
+
+class PostCreateView(CreateView):
+    model = Post
+    tempate_name = 'blog/create.html'
+
+
+class ProfileDetailtView(DetailView):
+    model = User
+    template_name = 'blog/profile.html'
