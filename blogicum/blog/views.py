@@ -6,7 +6,8 @@ from django.views.generic import (
 )
 from django.contrib.auth import get_user_model
 from django.db import models
-
+from django.urls import reverse_lazy
+from django.contrib.auth.mixins import UserPassesTestMixin
 
 User = get_user_model()
 
@@ -62,8 +63,32 @@ def category_posts(request, category_slug):
 class PostCreateView(CreateView):
     model = Post
     tempate_name = 'blog/create.html'
+    fields = '__all__'
 
 
-class ProfileDetailtView(DetailView):
+class ProfileDetailView(DetailView):
     model = User
     template_name = 'blog/profile.html'
+
+    def get_object(self):
+        return get_object_or_404(User, username=self.kwargs['username'])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        profile = self.get_object()
+        context['profile'] = profile
+        context['request'] = self.request
+
+        return context
+
+
+class ProfileUpdateView(UpdateView):
+    model = User
+    template_name = 'blog/user.html'
+
+    def get_success_url(self):
+        return reverse_lazy('blog:profile', kwargs={
+            'username': self.request.user.username})
+
+    def get_object(self):
+        return get_object_or_404(User, username=self.kwargs['username'])
