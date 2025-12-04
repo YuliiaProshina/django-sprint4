@@ -16,6 +16,14 @@ from django.urls import reverse
 User = get_user_model()
 
 
+class OnlyAuthorMixin(UserPassesTestMixin):
+
+    def test_func(self):
+        object = self.get_object()
+        return object.author == self.request.user 
+
+
+
 class IndexListView(ListView):
     """Рендеринг главной страницы."""
     model = Post
@@ -136,3 +144,27 @@ class CommentCreateView(LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context['form'] = CommentForm() 
         return context
+
+
+class CommentUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
+    model = Comment
+    form_class = CommentForm
+    pk_url_kwarg = 'comment_id'
+    template_name = 'blog/comment.html'
+
+    def get_success_url(self):
+        return reverse('blog:post_detail', kwargs={
+            'post_id': self.kwargs['post_id']
+        })
+
+
+class CommentDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
+    model = Comment
+    template_name = 'blog/comment.html'
+    success_url = reverse_lazy('blog:detail')
+    pk_url_kwarg = 'comment_id'
+
+    def get_success_url(self):
+        return reverse('blog:post_detail', kwargs={
+            'post_id': self.kwargs['post_id']
+        })
