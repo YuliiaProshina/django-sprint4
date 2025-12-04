@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
-from .models import Post, Category
+from .models import Post, Category, Comment
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
@@ -8,36 +8,58 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from .forms import CommentForm
+from django.urls import reverse
+
 
 User = get_user_model()
 
 
-def index(request):
+class IndexListView(ListView):
     """Рендеринг главной страницы."""
-    post_list = Post.objects.filter(
-        pub_date__lte=timezone.now(),
-        is_published=True,
-        category__is_published=True
-    ).order_by('-pub_date')[:5]
-    context = {
-        'post_list': post_list
-    }
-    return render(request, 'blog/index.html', context)
+    model = Post
+    template_name = 'blog/index.html'
+    ordering = '-pub_date'
+    paginate_by = 10 
+    # post_list = Post.objects.filter(
+    #     pub_date__lte=timezone.now(),
+    #     is_published=True,
+    #     category__is_published=True
+    # ).order_by('-pub_date')[:5]
+    # context = {
+    #     'post_list': post_list
+    # }
+    # return render(request, 'blog/index.html', context)
 
 
-def post_detail(request, post_id):
+class PostDetailView(DetailView):
     """Рендеринг страницы статьи."""
-    post = get_object_or_404(
-        Post.objects.filter(
-            pub_date__lte=timezone.now(),
-            is_published=True,
-            category__is_published=True),
-        pk=post_id
-    )
-    context = {
-        'post': post
-    }
-    return render(request, 'blog/detail.html', context)
+    model = Post
+    template_name = 'blog/detail.html'
+    ordering = '-pub_date'
+    paginate_by = 10 
+
+    def get_object(self):
+        return get_object_or_404(Post, id=self.kwargs['post_id'])
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = CommentForm()
+        context['comments'] = self.object.comments.all()
+        return context
+
+    # post = get_object_or_404(
+    #     Post.objects.filter(
+    #         pub_date__lte=timezone.now(),
+    #         is_published=True,
+    #         category__is_published=True),
+    #     pk=post_id
+    # )
+    # context = {
+    #     'post': post
+    # }
+    # return render(request, 'blog/detail.html', context)
 
 
 def category_posts(request, category_slug):
@@ -92,3 +114,25 @@ class ProfileUpdateView(UpdateView):
 
     def get_object(self):
         return get_object_or_404(User, username=self.kwargs['username'])
+    
+
+class CommentCreateView(LoginRequiredMixin, CreateView):
+    model = Comment
+    form_class = CommentForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.post_obj = get_object_or_404(Post, pk=self.kwargs['post_id'])
+        return super().dispatch(request, *args, **kwargs)
+    
+    def form_valid(self, form):
+        form.instance.author = self.request.user
+        form.instance.post = self.post_obj
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse('blog:post_detail', kwargs={'post_id': self.post_obj.id})
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = CommentForm() 
+        return context
