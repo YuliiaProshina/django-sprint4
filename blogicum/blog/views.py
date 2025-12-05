@@ -11,7 +11,7 @@ from django.contrib.auth.mixins import UserPassesTestMixin
 from django.contrib.auth.mixins import LoginRequiredMixin
 from .forms import CommentForm
 from django.urls import reverse
-
+from django.core.paginator import Paginator
 
 User = get_user_model()
 
@@ -99,15 +99,27 @@ class PostCreateView(CreateView):
 class ProfileDetailView(DetailView):
     model = User
     template_name = 'blog/profile.html'
+    context_object_name = 'profile'
 
     def get_object(self):
         return get_object_or_404(User, username=self.kwargs['username'])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        profile = self.get_object()
-        context['profile'] = profile
-        context['request'] = self.request
+        profile = self.object
+    
+        if self.request.user == profile:
+            posts = Post.objects.filter(author=profile).order_by('-pub_date')
+        else:
+            posts = Post.objects.filter(
+                author=profile,
+                is_published=True,
+                pub_date__lte=timezone.now(),
+                category__is_published=True,
+            ).order_by('-pub_date')
+        paginator = Paginator(posts, 10)
+        page_number = self.request.GET.get('page')
+        context['page_obj'] = paginator.get_page(page_number)
 
         return context
 
