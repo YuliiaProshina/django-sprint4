@@ -23,26 +23,16 @@ class OnlyAuthorMixin(UserPassesTestMixin):
         return object.author == self.request.user 
 
 
-
 class IndexListView(ListView):
-    """Рендеринг главной страницы."""
+    '''Рендеринг главной страницы.'''
     model = Post
     template_name = 'blog/index.html'
     ordering = '-pub_date'
     paginate_by = 10 
-    # post_list = Post.objects.filter(
-    #     pub_date__lte=timezone.now(),
-    #     is_published=True,
-    #     category__is_published=True
-    # ).order_by('-pub_date')[:5]
-    # context = {
-    #     'post_list': post_list
-    # }
-    # return render(request, 'blog/index.html', context)
-
+    
 
 class PostDetailView(DetailView):
-    """Рендеринг страницы статьи."""
+    '''Рендеринг страницы статьи.'''
     model = Post
     template_name = 'blog/detail.html'
     ordering = '-pub_date'
@@ -57,37 +47,36 @@ class PostDetailView(DetailView):
         context['comments'] = self.object.comments.all()
         return context
 
-    # post = get_object_or_404(
-    #     Post.objects.filter(
-    #         pub_date__lte=timezone.now(),
-    #         is_published=True,
-    #         category__is_published=True),
-    #     pk=post_id
-    # )
-    # context = {
-    #     'post': post
-    # }
-    # return render(request, 'blog/detail.html', context)
 
+class CategoryPostsView(ListView):
+    '''Рендеринг статьи по категории.'''
+    model = Post
+    template_name = 'blog/category.html'
+    paginate_by = 10
+    context_object_name = 'posts'
 
-def category_posts(request, category_slug):
-    """Рендеринг статьи по категории."""
-    category = get_object_or_404(
-        Category,
-        slug=category_slug,
-        is_published=True
-    )
-    posts = Post.objects.filter(
-        category=category.id,
-        is_published=True,
-        pub_date__lte=timezone.now()
-    ).order_by('-pub_date')
+    def get_queryset(self):
+        category = get_object_or_404(
+            Category,
+            slug=self.kwargs['category_slug'],
+            is_published=True
+        )
+        return Post.objects.filter(
+            category=category,
+            is_published=True,
+            pub_date__lte=timezone.now()
+        ).order_by('-pub_date')
 
-    context = {
-        'category': category,
-        'post_list': posts
-    }
-    return render(request, 'blog/category.html', context)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context['category'] = get_object_or_404(
+            Category,
+            slug=self.kwargs['category_slug'],
+            is_published=True
+        )
+
+        return context
 
 
 class PostCreateView(CreateView):
