@@ -39,6 +39,7 @@ class Post(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True,
                                       verbose_name='Добавлено')
+    image = models.ImageField('Изображение', blank=True)
 
     class Meta:
         verbose_name = 'публикация'
@@ -105,3 +106,5 @@ class Comment(models.Model):
 
     class Meta:
         ordering = ('created_at',) 
+
+

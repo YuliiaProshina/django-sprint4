@@ -9,7 +9,7 @@ from django.db import models
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.contrib.auth.mixins import LoginRequiredMixin
-from .forms import CommentForm
+from .forms import CommentForm, PostForm
 from django.urls import reverse
 from django.core.paginator import Paginator
 
@@ -79,10 +79,19 @@ class CategoryPostsView(ListView):
         return context
 
 
-class PostCreateView(CreateView):
+class PostCreateView(LoginRequiredMixin, CreateView):
     model = Post
-    tempate_name = 'blog/create.html'
-    fields = '__all__'
+    template_name = 'blog/create.html'
+    form_class = PostForm
+
+    def form_valid(self, form):
+        form.instance.author = self.request.user
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('blog:profile', kwargs={
+            'username': self.request.user.username
+        })
 
 
 class ProfileDetailView(DetailView):
