@@ -115,13 +115,14 @@ class ProfileDetailView(DetailView):
 class ProfileUpdateView(UpdateView):
     model = User
     template_name = 'blog/user.html'
+    fields = ('first_name', 'last_name', 'email', )
 
     def get_success_url(self):
         return reverse_lazy('blog:profile', kwargs={
             'username': self.request.user.username})
 
     def get_object(self):
-        return get_object_or_404(User, username=self.kwargs['username'])
+        return self.request.user
     
 
 class CommentCreateView(LoginRequiredMixin, CreateView):
