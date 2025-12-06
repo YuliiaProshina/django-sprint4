@@ -103,7 +103,7 @@ class PostUpdateView(OnlyAuthorMixin, UpdateView):
     pk_url_kwarg = 'post_id'
 
     def get_success_url(self):
-        return reverse('blog:detail', kwargs={'post_id': self.object.id})
+        return reverse('blog:post_detail', kwargs={'post_id': self.object.id})
 
 
 class PostDeleteView(OnlyAuthorMixin, DeleteView):
