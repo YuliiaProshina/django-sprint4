@@ -20,5 +20,5 @@ class PostForm(forms.ModelForm):
         
     class Meta:
         model = Post    
-        fields = ('title', 'text', 'location', 'image', 'pub_date', )  
+        fields = ('title', 'text', 'location', 'image', 'pub_date', 'category', )  
              

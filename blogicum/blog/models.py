@@ -95,9 +95,9 @@ class Location(models.Model):
 
 
 class Comment(models.Model):
-    text = models.TextField('Комментарий') 
+    text = models.TextField('Комментарий')
     post = models.ForeignKey(
-        Post, 
+        Post,
         on_delete=models.CASCADE,
         related_name='comments'
     )
@@ -105,6 +105,4 @@ class Comment(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE)
 
     class Meta:
-        ordering = ('created_at',) 
-
-
+        ordering = ('created_at',)

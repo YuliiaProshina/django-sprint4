@@ -94,6 +94,30 @@ class PostCreateView(LoginRequiredMixin, CreateView):
         })
 
 
+class PostUpdateView(OnlyAuthorMixin, UpdateView):
+    model = Post
+    form_class = PostForm
+    template_name = 'blog/create.html'
+    pk_url_kwarg = 'post_id'
+
+    def get_success_url(self):
+        return reverse('blog:detail', kwargs={'post_id': self.object.id})
+
+
+class PostDeleteView(OnlyAuthorMixin, DeleteView):
+    model = Post
+    
+    template_name = 'blog/create.html'
+    pk_url_kwarg = 'post_id'
+    success_url = reverse_lazy('blog:index')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        context['form'] = PostForm(instance=self.object)
+        return context
+
+
 class ProfileDetailView(DetailView):
     model = User
     template_name = 'blog/profile.html'
