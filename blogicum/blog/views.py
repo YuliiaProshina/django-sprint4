@@ -5,13 +5,15 @@ from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
 from django.contrib.auth import get_user_model
-from django.db import models
+
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.contrib.auth.mixins import LoginRequiredMixin
 from .forms import CommentForm, PostForm
 from django.urls import reverse
 from django.core.paginator import Paginator
+
+
 
 User = get_user_model()
 

@@ -41,6 +41,10 @@ class Post(models.Model):
                                       verbose_name='Добавлено')
     image = models.ImageField('Изображение', blank=True)
 
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
     class Meta:
         verbose_name = 'публикация'
         verbose_name_plural = 'Публикации'
