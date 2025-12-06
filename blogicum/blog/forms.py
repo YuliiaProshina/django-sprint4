@@ -1,6 +1,7 @@
+from django import forms
+
 from .models import Comment, Post
-from django import forms 
-from django.utils import timezone
+
 
 class CommentForm(forms.ModelForm):
     class Meta:
@@ -16,14 +17,6 @@ class PostForm(forms.ModelForm):
             attrs={'type': 'datetime-local'}
         )
     )
-
-    def clean_pub_date(self):
-        pub_date = self.cleaned_data.get('pub_date')
-        if pub_date and pub_date < timezone.now():
-            raise forms.ValidationError(
-                'Дата публикации не может быть в прошлом.'
-            )
-        return pub_date
 
     class Meta:
         model = Post
