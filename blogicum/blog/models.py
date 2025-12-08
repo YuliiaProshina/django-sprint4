@@ -109,3 +109,5 @@ class Comment(models.Model):
 
     class Meta:
         ordering = ('created_at',)
+        verbose_name = 'Комментарий'
+        verbose_name_plural = 'Комментарии'
