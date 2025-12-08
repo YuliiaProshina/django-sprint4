@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
+from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -39,7 +40,7 @@ class IndexListView(ListView):
             is_published=True,
             pub_date__lte=timezone.now(),
             category__is_published=True
-        ).order_by('-pub_date')
+        ).annotate(comment_count=Count('comments')).order_by('-pub_date')
 
 
 class PostDetailView(DetailView):
@@ -91,7 +92,7 @@ class CategoryPostsView(ListView):
             category=category,
             is_published=True,
             pub_date__lte=timezone.now()
-        ).order_by('-pub_date')
+        ).annotate(comment_count=Count('comments')).order_by('-pub_date')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -170,14 +171,15 @@ class ProfileDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         profile = self.object
         if self.request.user == profile:
-            posts = Post.objects.filter(author=profile).order_by('-pub_date')
+            posts = Post.objects.filter(author=profile).annotate(
+                comment_count=Count('comments')).order_by('-pub_date')
         else:
             posts = Post.objects.filter(
                 author=profile,
                 is_published=True,
                 pub_date__lte=timezone.now(),
                 category__is_published=True,
-            ).order_by('-pub_date')
+            ).annotate(comment_count=Count('comments')).order_by('-pub_date') 
         paginator = Paginator(posts, 10)
         page_number = self.request.GET.get('page')
         context['page_obj'] = paginator.get_page(page_number)
