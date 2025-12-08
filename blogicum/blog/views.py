@@ -1,10 +1,10 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db.models import Count
 from django.http import Http404
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import (CreateView, DeleteView, DetailView, ListView,
@@ -12,70 +12,59 @@ from django.views.generic import (CreateView, DeleteView, DetailView, ListView,
 
 from .forms import CommentForm, PostForm
 from .models import Category, Comment, Post
+from .mixins import OnlyAuthorMixin
+from .constants import PAGINATION_COUNT
 
 User = get_user_model()
 
 
-class OnlyAuthorMixin(UserPassesTestMixin):
-    """Проверка, что пользователь является автором"""
+def get_posts_queryset(*, apply_filter=True, annotate_comments=True):
+    """Возвращает QuerySet постов.
+       Параметры:
+       apply_filter: отфильтровать опубликованные посты,
+       annotate_comments: посчитать количество комментариев.
+    """
+    query_set = Post.objects.select_related('author', 'category', 'location')
+    if apply_filter:
+        query_set = query_set.filter(
+            is_published=True,
+            category__is_published=True,
+            pub_date__lte=timezone.now(),
+        )
+    if annotate_comments:
+        query_set = query_set.annotate(comment_count=Count('comments'))
 
-    def test_func(self):
-        object = self.get_object()
-        return object.author == self.request.user
-
-    def handle_no_permission(self):
-        return redirect(reverse('blog:post_detail',
-                                kwargs={'post_id': self.get_object().id}))
+    return query_set.order_by('-pub_date')
 
 
 class IndexListView(ListView):
-    """Отображение главной страницы"""
+    """Отображение главной страницы."""
 
     model = Post
     template_name = 'blog/index.html'
-    paginate_by = 10
+    paginate_by = PAGINATION_COUNT
 
     def get_queryset(self):
-        return Post.objects.filter(
-            is_published=True,
-            pub_date__lte=timezone.now(),
-            category__is_published=True
-        ).annotate(comment_count=Count('comments')).order_by('-pub_date')
+        return get_posts_queryset()
 
 
 class PostDetailView(DetailView):
-    """Отображение страницы поста"""
+    """Отображение страницы поста."""
 
     model = Post
     template_name = 'blog/detail.html'
-    ordering = '-pub_date'
-    paginate_by = 10
-
-    def get_object(self):
-        post = get_object_or_404(Post, id=self.kwargs['post_id'])
-        if (
-            self.request.user.is_authenticated
-            and self.request.user == post.author
-        ):
-            return post
-
-        if (
-            post.is_published
-            and post.category.is_published
-            and post.pub_date <= timezone.now()
-        ):
-            return post
-        raise Http404('Пост не найден')
+    pk_url_kwarg = 'post_id'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = CommentForm()
-        context['comments'] = self.object.comments.order_by('created_at')
+        context['comments'] = self.object.comments.select_related(
+            'author').order_by('created_at')
         return context
 
 
 class CategoryPostsView(ListView):
-    """Отображение постов по категориям"""
+    """Отображение постов по категориям."""
 
     model = Post
     template_name = 'blog/category.html'
@@ -105,7 +94,7 @@ class CategoryPostsView(ListView):
 
 
 class PostCreateView(LoginRequiredMixin, CreateView):
-    """Создание поста"""
+    """Создание поста."""
 
     model = Post
     template_name = 'blog/create.html'
@@ -124,7 +113,7 @@ class PostCreateView(LoginRequiredMixin, CreateView):
 
 
 class PostUpdateView(OnlyAuthorMixin, UpdateView):
-    """Редактирование поста"""
+    """Редактирование поста."""
 
     model = Post
     form_class = PostForm
@@ -144,7 +133,7 @@ class PostUpdateView(OnlyAuthorMixin, UpdateView):
 
 
 class PostDeleteView(OnlyAuthorMixin, DeleteView):
-    """Удаление поста"""
+    """Удаление поста."""
 
     model = Post
     template_name = 'blog/create.html'
@@ -158,7 +147,7 @@ class PostDeleteView(OnlyAuthorMixin, DeleteView):
 
 
 class ProfileDetailView(DetailView):
-    """Отображение профиля пользователя"""
+    """Отображение профиля пользователя."""
 
     model = User
     template_name = 'blog/profile.html'
@@ -187,7 +176,7 @@ class ProfileDetailView(DetailView):
 
 
 class ProfileUpdateView(LoginRequiredMixin, UpdateView):
-    """Редактирование профиля пользователя"""
+    """Редактирование профиля пользователя."""
 
     model = User
     template_name = 'blog/user.html'
@@ -202,7 +191,7 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 
 
 class CommentCreateView(LoginRequiredMixin, CreateView):
-    """Создание комментариев"""
+    """Создание комментариев."""
 
     model = Comment
     form_class = CommentForm
@@ -227,7 +216,7 @@ class CommentCreateView(LoginRequiredMixin, CreateView):
 
 
 class CommentUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
-    """Редактирование комментария"""
+    """Редактирование комментария."""
 
     model = Comment
     form_class = CommentForm
@@ -241,7 +230,7 @@ class CommentUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
 
 
 class CommentDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
-    """Удаление комментария"""
+    """Удаление комментария."""
 
     model = Comment
     template_name = 'blog/comment.html'
