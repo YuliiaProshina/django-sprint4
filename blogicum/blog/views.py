@@ -1,4 +1,3 @@
-from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
@@ -10,21 +9,27 @@ from django.utils import timezone
 from django.views.generic import (CreateView, DeleteView, DetailView, ListView,
                                   UpdateView)
 
-from .forms import CommentForm, PostForm
-from .models import Category, Comment, Post
-from .mixins import OnlyAuthorMixin
 from .constants import PAGINATION_COUNT
+from .forms import CommentForm, PostForm
+from .mixins import OnlyAuthorMixin
+from .models import Category, Comment, Post
 
 User = get_user_model()
 
 
-def get_posts_queryset(*, apply_filter=True, annotate_comments=True):
+def get_posts_queryset(*, base_queryset=None, apply_filter=True,
+                       annotate_comments=True):
     """Возвращает QuerySet постов.
-       Параметры:
-       apply_filter: отфильтровать опубликованные посты,
-       annotate_comments: посчитать количество комментариев.
+    Параметры:
+    base_queryset: начальный сет,
+    apply_filter: отфильтровать опубликованные посты,
+    annotate_comments: посчитать количество комментариев.
     """
-    query_set = Post.objects.select_related('author', 'category', 'location')
+    if base_queryset is None:
+        query_set = Post.objects
+    else:
+        query_set = base_queryset
+    query_set = query_set.select_related('author', 'category', 'location')
     if apply_filter:
         query_set = query_set.filter(
             is_published=True,
@@ -55,6 +60,19 @@ class PostDetailView(DetailView):
     template_name = 'blog/detail.html'
     pk_url_kwarg = 'post_id'
 
+    def get_object(self):
+        post = super().get_object()
+        user = self.request.user
+        if user.is_authenticated and user == post.author:
+            return post
+        if (
+            post.is_published
+            and post.category.is_published
+            and post.pub_date <= timezone.now()
+        ):
+            return post
+        raise Http404('Пост не найден')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = CommentForm()
@@ -68,28 +86,24 @@ class CategoryPostsView(ListView):
 
     model = Post
     template_name = 'blog/category.html'
-    paginate_by = 10
-    context_object_name = 'posts'
+    paginate_by = PAGINATION_COUNT
 
-    def get_queryset(self):
-        category = get_object_or_404(
+    def get_category(self):
+        return get_object_or_404(
             Category,
             slug=self.kwargs['category_slug'],
             is_published=True
         )
-        return Post.objects.filter(
-            category=category,
-            is_published=True,
-            pub_date__lte=timezone.now()
-        ).annotate(comment_count=Count('comments')).order_by('-pub_date')
+
+    def get_queryset(self):
+        category = self.get_category()
+        return get_posts_queryset(
+            base_queryset=category.posts.all()
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['category'] = get_object_or_404(
-            Category,
-            slug=self.kwargs['category_slug'],
-            is_published=True
-        )
+        context['category'] = self.get_category()
         return context
 
 
@@ -102,12 +116,10 @@ class PostCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.author = self.request.user
-        if form.cleaned_data['pub_date'] < timezone.now():
-            form.instance.pub_date = timezone.now()
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy('blog:profile', kwargs={
+        return reverse('blog:profile', kwargs={
             'username': self.request.user.username
         })
 
@@ -119,14 +131,6 @@ class PostUpdateView(OnlyAuthorMixin, UpdateView):
     form_class = PostForm
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
-
-    def clean_pub_date(self):
-        pub_date = self.cleaned_data.get('pub_date')
-        if pub_date and pub_date < timezone.now():
-            raise forms.ValidationError(
-                'Дата публикации не может быть в прошлом.'
-            )
-        return pub_date
 
     def get_success_url(self):
         return reverse('blog:post_detail', kwargs={'post_id': self.object.id})
@@ -163,13 +167,8 @@ class ProfileDetailView(DetailView):
             posts = Post.objects.filter(author=profile).annotate(
                 comment_count=Count('comments')).order_by('-pub_date')
         else:
-            posts = Post.objects.filter(
-                author=profile,
-                is_published=True,
-                pub_date__lte=timezone.now(),
-                category__is_published=True,
-            ).annotate(comment_count=Count('comments')).order_by('-pub_date') 
-        paginator = Paginator(posts, 10)
+            posts = get_posts_queryset(base_queryset=profile.posts.all())
+        paginator = Paginator(posts, PAGINATION_COUNT)
         page_number = self.request.GET.get('page')
         context['page_obj'] = paginator.get_page(page_number)
         return context
@@ -183,7 +182,7 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     fields = ('first_name', 'last_name', 'email', )
 
     def get_success_url(self):
-        return reverse_lazy('blog:profile', kwargs={
+        return reverse('blog:profile', kwargs={
             'username': self.request.user.username})
 
     def get_object(self):
@@ -196,23 +195,15 @@ class CommentCreateView(LoginRequiredMixin, CreateView):
     model = Comment
     form_class = CommentForm
 
-    def dispatch(self, request, *args, **kwargs):
-        self.post_obj = get_object_or_404(Post, pk=self.kwargs['post_id'])
-        return super().dispatch(request, *args, **kwargs)
-
     def form_valid(self, form):
         form.instance.author = self.request.user
-        form.instance.post = self.post_obj
+        post = get_object_or_404(Post, pk=self.kwargs['post_id'])
+        form.instance.post = post
         return super().form_valid(form)
 
     def get_success_url(self):
         return reverse('blog:post_detail',
-                       kwargs={'post_id': self.post_obj.id})
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['form'] = CommentForm()
-        return context
+                       kwargs={'post_id': self.kwargs['post_id']})
 
 
 class CommentUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
@@ -229,7 +220,7 @@ class CommentUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
         })
 
 
-class CommentDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
+class CommentDeleteView(LoginRequiredMixin, OnlyAuthorMixin, DeleteView):
     """Удаление комментария."""
 
     model = Comment

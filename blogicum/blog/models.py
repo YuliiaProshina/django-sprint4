@@ -2,7 +2,6 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.urls import reverse
 
-
 User = get_user_model()
 
 
@@ -76,7 +75,8 @@ class Post(CommonInfo):
         Category,
         on_delete=models.SET_NULL,
         null=True,
-        verbose_name='Категория'
+        verbose_name='Категория',
+        related_name='posts'
     )
     image = models.ImageField('Изображение', blank=True)
 
