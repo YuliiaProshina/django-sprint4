@@ -1,7 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
-from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -13,33 +12,9 @@ from .constants import PAGINATION_COUNT
 from .forms import CommentForm, PostForm
 from .mixins import OnlyAuthorMixin
 from .models import Category, Comment, Post
+from .service import get_posts_queryset
 
 User = get_user_model()
-
-
-def get_posts_queryset(*, base_queryset=None, apply_filter=True,
-                       annotate_comments=True):
-    """Возвращает QuerySet постов.
-    Параметры:
-    base_queryset: начальный сет,
-    apply_filter: отфильтровать опубликованные посты,
-    annotate_comments: посчитать количество комментариев.
-    """
-    if base_queryset is None:
-        query_set = Post.objects
-    else:
-        query_set = base_queryset
-    query_set = query_set.select_related('author', 'category', 'location')
-    if apply_filter:
-        query_set = query_set.filter(
-            is_published=True,
-            category__is_published=True,
-            pub_date__lte=timezone.now(),
-        )
-    if annotate_comments:
-        query_set = query_set.annotate(comment_count=Count('comments'))
-
-    return query_set.order_by('-pub_date')
 
 
 class IndexListView(ListView):
@@ -63,13 +38,13 @@ class PostDetailView(DetailView):
     def get_object(self):
         post = super().get_object()
         user = self.request.user
-        if user.is_authenticated and user == post.author:
-            return post
-        if (
+        is_author = user.is_authenticated and user == post.author
+        is_public = (
             post.is_published
             and post.category.is_published
             and post.pub_date <= timezone.now()
-        ):
+        )
+        if is_author or is_public:
             return post
         raise Http404('Пост не найден')
 
@@ -77,7 +52,7 @@ class PostDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['form'] = CommentForm()
         context['comments'] = self.object.comments.select_related(
-            'author').order_by('created_at')
+            'author')
         return context
 
 
@@ -163,11 +138,8 @@ class ProfileDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         profile = self.object
-        if self.request.user == profile:
-            posts = Post.objects.filter(author=profile).annotate(
-                comment_count=Count('comments')).order_by('-pub_date')
-        else:
-            posts = get_posts_queryset(base_queryset=profile.posts.all())
+        posts = get_posts_queryset(base_queryset=profile.posts.all(),
+                                   apply_filter=self.request.user != profile)
         paginator = Paginator(posts, PAGINATION_COUNT)
         page_number = self.request.GET.get('page')
         context['page_obj'] = paginator.get_page(page_number)

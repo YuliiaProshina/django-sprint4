@@ -28,4 +28,4 @@ class PostAdmin(admin.ModelAdmin):
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
     list_display = ('text', 'author',)
-    search_fields = ('text', 'author',)
+    search_fields = ('text', 'author__username',)
